@@ -69,89 +69,22 @@ function App() {
   const [uniswapRouterInstance, setUniswapRouterInstance] = useState(null);
 
   useEffect(() => {
-    const browserProvider = new BrowserProvider(window.ethereum);
-    browserProvider
-      .getSigner()
-      .then((resp) => {
-        setSigner(resp);
-        const routerContract = new ethers.Contract(
-          uniswapRouterContract,
-          routerAbi,
-          resp
-        );
-        setUniswapRouterInstance(routerContract);
-      })
-      .catch((err) => {
-        console.log(err);
-        toast.error("Please check the console for error logs");
-      });
-    const infuraProvider = new InfuraProvider(
-      "goerli",
-      process.env.REACT_APP_KEY
-    );
-    setProvider(infuraProvider);
+    handleConnection();
+    window.ethereum.on("chainChanged", (cid) => {
+      if (cid !== "0x5") {
+        alert("Invalid network selected. Please switch to goerli");
+        handleConnection();
+      }
+    });
+    window.ethereum.on("accountsChanged", (account) => {
+      if (account.length == 0) {
+        setIsConnected(false);
+        setAddress();
+      } else {
+        setAddress(account[0]);
+      }
+    });
 
-    window.ethereum
-      .request({
-        method: "eth_accounts",
-        params: [],
-      })
-      .then((resp) => {
-        if (resp.length == 0) {
-          setIsConnected(false);
-        } else {
-          window.ethereum
-            .request({
-              method: "eth_chainId",
-            })
-            .then((resp) => {
-              if (resp !== "0x5") {
-                window.ethereum
-                  .request({
-                    method: "wallet_switchEthereumChain",
-                    params: [
-                      {
-                        chainId: "0x5",
-                      },
-                    ],
-                  })
-                  .then((re) => {
-                    if (re == null) {
-                      setIsConnected(true);
-                    } else {
-                      alert("Unable to connect to metamask!");
-                    }
-                  })
-                  .catch((er) => {
-                    console.log(er);
-                    toast.error("Please check the console for error logs");
-                  });
-              } else {
-                window.ethereum
-                  .request({
-                    method: "eth_accounts",
-                    params: [],
-                  })
-                  .then((resp) => {
-                    setAddress(resp[0]);
-                    setIsConnected(true);
-                  })
-                  .catch((errr) => {
-                    console.log(errr);
-                    toast.error("Please check the console for error logs");
-                  });
-              }
-            })
-            .catch((err) => {
-              console.log(err);
-              toast.error("Please check the console for error logs");
-            });
-        }
-      })
-      .catch((err) => {
-        console.log(err);
-        toast.error("Please check the console for error logs");
-      });
   }, []);
 
   useEffect(() => {
@@ -160,7 +93,6 @@ function App() {
 
   useEffect(() => {
     function fetchOutComes() {
-      // If from and to are ETH/WETH then we dont need to check getAmountsOut as its 1:1 ratio else will just show outcome amount
       if (
         (selectedOne.symbol == "ETH" && selectedTwo.symbol == "WETH") ||
         (selectedOne.symbol == "WETH" && selectedTwo.symbol == "ETH")
@@ -250,7 +182,6 @@ function App() {
   };
 
   const trackApprovals = (tx, tc) => {
-    console.log("Current allowance: ", allowance);
     setTxStatus(3);
     setSwapLoader(true);
     var interval = setInterval(() => {
@@ -258,7 +189,6 @@ function App() {
         .getTransactionReceipt(tx)
         .then((resp) => {
           if (resp !== null) {
-            console.log("RESP: ", resp);
             if (resp.status == 1) {
               setSwapLoader(false);
               setTimeout(() => {
@@ -291,27 +221,99 @@ function App() {
     if (!ethereum) {
       alert("Please install metamask to use this app!");
     } else {
-      const account = await window.ethereum.request({
-        method: "eth_requestAccounts",
-      });
-      if (account) {
-        const chainId = await window.ethereum.request({
-          method: "eth_chainId",
+      const browserProvider = new BrowserProvider(window.ethereum);
+      browserProvider
+        .getSigner()
+        .then((resp) => {
+          setSigner(resp);
+          const routerContract = new ethers.Contract(
+            uniswapRouterContract,
+            routerAbi,
+            resp
+          );
+          setUniswapRouterInstance(routerContract);
+          window.ethereum
+            .request({
+              method: "eth_chainId",
+              params: [],
+            })
+            .then((resp) => {
+              if (resp !== "0x5") {
+                window.ethereum
+                  .request({
+                    method: "wallet_switchEthereumChain",
+                    params: [
+                      {
+                        chainId: "0x5",
+                      },
+                    ],
+                  })
+                  .then((re) => {
+                    if (re == null) {
+                      fetchAccount();
+                    } else {
+                      alert("Unable to connect to metamask!");
+                    }
+                  })
+                  .catch((er) => {
+                    if (er.code == 4001) {
+                      setIsConnected(false);
+                      toast.error("You rejected this transaction");
+                    } else {
+                      toast.error("Please check console for error logs");
+                      console.log(er);
+                    }
+                  });
+              } else {
+                fetchAccount();
+              }
+            })
+            .catch((err) => {
+              console.log(err);
+              toast.error("Please check console for error logs");
+            });
+        })
+        .catch((err) => {
+          if (err.code == 4001 || err.reason == "rejected") {
+            toast.error("You rejected metamask connection!");
+          } else if (err.error.code !== -32002) {
+            toast.error("Please check console for error logs");
+            console.log(err);
+          } else {
+            console.log(err);
+          }
         });
-        if (chainId !== "0x5") {
-          const switchToGoerli = await window.ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [
-              {
-                chainId: "0x5",
-              },
-            ],
-          });
-          setIsConnected(true);
-        }
-      }
+      const infuraProvider = new InfuraProvider(
+        "goerli",
+        process.env.REACT_APP_KEY
+      );
+      setProvider(infuraProvider);
     }
   };
+
+  function fetchAccount() {
+    window.ethereum
+      .request({
+        method: "eth_requestAccounts",
+        params: [],
+      })
+      .then((resp) => {
+        if (resp.length == 0) {
+          handleConnection();
+        } else {
+          setAddress(resp[0]);
+          setIsConnected(true);
+        }
+      })
+      .catch((errr) => {
+        if (errr.code == 4001) {
+          toast.error("You rejected this transaction");
+        } else {
+          toast.error("Please check console for error logs");
+          console.log(errr);
+        }
+      });
+  }
 
   const fetchAllowance = (tokenContractOne) => {
     if (selectedOne.symbol == "ETH") {
@@ -320,11 +322,6 @@ function App() {
       tokenContractOne
         .allowance(address, uniswapRouterContract)
         .then((resp) => {
-          console.log(
-            "Allowance after calling: ",
-            ethers.formatEther(resp),
-            resp
-          );
           setAllowance(ethers.formatEther(resp));
           return true;
         })
@@ -336,12 +333,6 @@ function App() {
   };
 
   const getSetBalances = () => {
-    if (selectedOne && selectedTwo) {
-      console.log({
-        selectedOne: selectedOne.symbol,
-        selectedTwo: selectedTwo.symbol,
-      });
-    }
     if (selectedOne !== null && selectedOne.symbol == "ETH") {
       provider.getBalance(address).then((c) => {
         const balance = Number(ethers.formatEther(c)).toFixed(3);
@@ -562,7 +553,6 @@ function App() {
             setSwapLoader(false);
           })
           .catch((err) => {
-            console.log(err);
             if (err.reason == "rejected") {
               toast.error("You rejected this transaction");
             } else {
@@ -601,7 +591,9 @@ function App() {
           </Button>
           <Button
             onClick={() => {
-              handleConnection();
+              if (isConnected == false) {
+                handleConnection();
+              }
             }}
           >
             {isConnected == true ? "Connected" : "Connect"}
@@ -689,7 +681,6 @@ function App() {
                     setSelectedTwo(selectedOne);
                     setFromAmount(0);
                     setToAmount(0);
-                    console.log(selectedOne, selectedTwo);
                   }}
                 >
                   <ArrowDownUp
@@ -762,6 +753,8 @@ function App() {
               disabled={
                 txStatus == 0 || txStatus == 1 || txStatus == 3
                   ? true
+                  : isConnected == false
+                  ? false
                   : isDisabledSwap
               }
               variant={
@@ -778,6 +771,7 @@ function App() {
                 if (isConnected == true) {
                   swapHandler();
                 } else {
+                  handleConnection();
                 }
               }}
             >
@@ -787,6 +781,7 @@ function App() {
                 selectedTwo == null) ||
                 ((selectedOne == null || selectedTwo == null) &&
                   txStatus == null &&
+                  isConnected == true &&
                   "Please select token's")}
               {isConnected == true &&
                 selectedOne &&
@@ -804,10 +799,7 @@ function App() {
                 selectedTwo !== null &&
                 txStatus == null &&
                 "Approve"}
-              {isConnected == false &&
-                Number(allowance) < Number(fromAmount) &&
-                txStatus == null &&
-                "Connect"}
+              {isConnected == false && txStatus == null && "Connect"}
               {txStatus == 0
                 ? "Failed"
                 : txStatus == 1
