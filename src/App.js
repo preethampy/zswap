@@ -85,7 +85,6 @@ function App() {
         setAddress(account[0]);
       }
     });
-
   }, []);
 
   useEffect(() => {
@@ -548,7 +547,7 @@ function App() {
             BigInt(ethers.parseEther(toAmount.toString())),
             [selectedOne.contract, selectedTwo.contract],
             address,
-            ethers.parseEther(Date.now().toString()),
+            ethers.parseEther(Date.now().toString())
           )
           .then((resp) => {
             trackSwaps(resp.hash);
