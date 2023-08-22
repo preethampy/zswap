@@ -17,7 +17,8 @@ import { toast } from "react-hot-toast";
 import { BrowserProvider, ethers, InfuraProvider } from "ethers";
 import { Spinner } from "react-bootstrap";
 import { CaretDownFill, ArrowDownUp } from "react-bootstrap-icons";
-
+// formatEther takes wei string and convert it into decimal string - ex. formatEther("1000000000000000000") = "1"
+// parseEther takes ether string and convert it into BigIn - ex. parseEther("1") = BigInt object
 function App() {
   const uniswapRouterContract = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
   const routerAbi = require("./abis/router.json");
@@ -119,7 +120,8 @@ function App() {
           provider
         );
         uniswapRouterInstance
-          .getAmountsOut(ethers.parseEther(fromAmount.toString()), [
+          // eslint-disable-next-line no-undef
+          .getAmountsOut(BigInt(ethers.parseEther(fromAmount.toString())), [
             selectedOne.symbol == "ETH"
               ? availableTokens[2].contract
               : selectedOne.contract,
@@ -539,14 +541,14 @@ function App() {
           });
       } else {
         uniswapRouterInstance
-          .swapExactTokensForTokens(
+          .swapTokensForExactTokens(
             // eslint-disable-next-line no-undef
             BigInt(ethers.parseEther(fromAmount.toString())),
             // eslint-disable-next-line no-undef
             BigInt(ethers.parseEther(toAmount.toString())),
             [selectedOne.contract, selectedTwo.contract],
             address,
-            Date.now()
+            ethers.parseEther(Date.now().toString()),
           )
           .then((resp) => {
             trackSwaps(resp.hash);
